@@ -57,5 +57,44 @@ def shopping_cart():
     else:
         return 'Add to Cart Fail', 403
 
+@app.route('/api/shopping_cart', methods=['GET'])
+def get_shop():
+    auth_token = request.args.get('auth_token')
+    print auth_token
+    check_token = db.query('select * from auth_token where token = $1', auth_token).namedresult()
+    if len(check_token) > 0:
+        customer = db.query('select customer_id from auth_token where token = $1', auth_token).namedresult()[0]
+        results = db.query('select product.name as prodName, product.price as prodPrice, product.description as prodDescription, product.image_path as prodImg from product_in_shopping_cart, product where product_in_shopping_cart.product_id = product.id and customer_id =$1', customer.customer_id).dictresult()
+        print results
+        return jsonify(results)
+    else:
+        return 'fail', 403
+
+@app.route('/api/shopping_cart/checkout', methods=['POST'])
+def checkout():
+    auth_token = request.args.get('auth_token')
+    # print auth_token
+    check_token = db.query('select * from auth_token where token = $1', auth_token).namedresult()
+    if len(check_token) > 0:
+        customer = db.query('select customer_id from auth_token where token = $1', auth_token).namedresult()[0]
+        chat = db.query('select product.id as prod_id, product.name as prodName, product.price as prodPrice, product.description as prodDescription, product.image_path as prodImg from product_in_shopping_cart, product where product_in_shopping_cart.product_id = product.id and customer_id =$1', customer.customer_id).dictresult()
+        total = db.query('select sum(product.price) as total from product_in_shopping_cart, product where product_in_shopping_cart.product_id = product.id and customer_id =$1', customer.customer_id).namedresult()[0]
+        # print chat
+        db.insert('purchase', customer_id=customer.customer_id, total_price=total.total)
+
+
+        purchase_id = db.query('select id from purchase order by id desc limit 1').namedresult()[0].id
+
+        for product in chat:
+            print product
+            db.insert('product_in_purchase', purchase_id=purchase_id, product_id=product['prod_id'])
+
+        result = db.query('delete from product_in_shopping_cart where customer_id= $1', customer.customer_id)
+
+        return result, 200
+    else:
+        return 'fail', 403
+
+
 if __name__ == '__main__':
     app.run(debug=True)
