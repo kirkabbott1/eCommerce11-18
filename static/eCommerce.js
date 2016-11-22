@@ -1,4 +1,4 @@
-var app = angular.module('eCommerce', ['ui.router']);
+var app = angular.module('eCommerce', ['ui.router', 'ngCookies']);
 
 app.config(function($stateProvider, $urlRouterProvider) {
   $stateProvider
@@ -32,21 +32,33 @@ app.config(function($stateProvider, $urlRouterProvider) {
 //
 
 //
-app.factory('yachtFactory', function factoryFunction($http) {
+app.factory('yachtFactory', function factoryFunction($http, $rootScope, $cookies) {
   var service = {};
+  var userInfo = {};
+  $rootScope.userName = $cookies.get('username');
+  $rootScope.userToken = $cookies.get('token');
+  $rootScope.logout = function(){
+    $cookies.remove('userData');
+    $rootScope.userName = '';
+  };
+  service.storeUserInfo = function(data) {
+    userInfo.authtoken = data.token;
+  };
+  service.getUserInfo = function() {
+    return userInfo;
+  };
   service.prods = function() {
     return $http ({
       method: 'GET',
       url: '/api/products'
       });
-
   };
   service.prodId = function(id) {
     return $http ({
       method: 'GET',
       url: '/api/product/' + id
     });
-  }
+  };
   service.signUp = function(userdata) {
     return $http ({
       method: 'POST',
@@ -61,6 +73,16 @@ app.factory('yachtFactory', function factoryFunction($http) {
       data: userdata
     })
   }
+  service.addToCart = function(auth_token, product_id) {
+    return $http ({
+      method: 'POST',
+      url: '/api/shopping_cart',
+      data: {
+        auth_token: auth_token,
+        product_id: product_id
+      }
+    });
+  }
   return service;
 })
 
@@ -71,10 +93,9 @@ app.controller('frontpageController', function($scope, yachtFactory) {
     console.log(data);
     $scope.searchresults = data
     console.log($scope.searchresults);
-
   })
 })
-app.controller('productDetailsController', function($scope, $stateParams, yachtFactory) {
+app.controller('productDetailsController', function($scope, $stateParams, yachtFactory, $rootScope) {
   $scope.productId = $stateParams.productId;
   console.log($scope.productId);
   yachtFactory.prodId($scope.productId)
@@ -82,6 +103,11 @@ app.controller('productDetailsController', function($scope, $stateParams, yachtF
     $scope.prodInfo = data[0]
     console.log($scope.prodInfo)
   })
+  $scope.detailAddCart = function() {
+    yachtFactory.addToCart($rootScope.userToken, $scope.productId)
+    console.log($rootScope.userToken)
+    console.log($scope.productId)
+    }
 });
 
 app.controller('signupController', function($scope, $state, yachtFactory) {
@@ -101,23 +127,32 @@ app.controller('signupController', function($scope, $state, yachtFactory) {
       $state.go('login')
     })
 
-  }
-  else{
+  } else{
     $scope.doesntMatch = true;
+    }
   }
-}
 });
 
-app.controller('loginController', function($scope, $state, yachtFactory) {
-$scope.submitEnterSite = function(){
-  var loginInfo = {
-    'username': $scope.username,
-    'password': $scope.pass1
+app.controller('loginController', function($scope, $state, yachtFactory, $cookies, $rootScope) {
+  $scope.submitEnterSite = function(){
+    var loginInfo = {
+      'username': $scope.username,
+      'password': $scope.pass1
+    }
+
+    console.log($scope.username)
+    yachtFactory.login(loginInfo)
+    .error(function(data) {
+      $scope.failed = true;
+    })
+    .success(function(data) {
+      console.log(data);
+      $cookies.putObject('userData', data.user)
+      $cookies.put('token', data.authtoken)
+      $cookies.put('username', data.user.username)
+      $rootScope.userName = $cookies.get('username');
+      console.log(loginInfo.password);
+      $state.go('frontpage');
+    })
   }
-  console.log(loginInfo)
-  yachtFactory.login(loginInfo)
-  .success(function() {
-    $state.go('frontpage')
-  })
-}
 })

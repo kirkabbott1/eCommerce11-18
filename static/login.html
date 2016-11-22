@@ -1,6 +1,6 @@
 <form >
   <div class="form-group">
-    <label for="exampleInputEmail1">Username</label>
+    <label >Username</label>
     <input ng-model='username' name='username' type="text" class="form-control" aria-describedby="emailHelp" placeholder="Enter a username">
     <small id="emailHelp" class="form-text text-muted"></small>
   </div>
@@ -12,4 +12,7 @@
 
 
     <button ng-click='submitEnterSite()'type="submit" method='post' name="button">Submit</button>
+    <h3 ng-if="failed">
+      login failed
+    </h3>
 </form>
