@@ -27,6 +27,18 @@ app.config(function($stateProvider, $urlRouterProvider) {
     templateUrl: 'login.html',
     controller: 'loginController'
   })
+  .state({
+    name: 'shoppingCart',
+    url: '/user/shoppingcart',
+    templateUrl: 'shoppingcart.html',
+    controller: 'shoppingCartController'
+  })
+  .state({
+    name: 'checkout',
+    url: '/user/shoppingcart/checkout',
+    templateUrl: 'checkoutpage.html',
+    controller: 'checkOutController'
+  })
   $urlRouterProvider.otherwise('/');
 })
 //
@@ -83,6 +95,24 @@ app.factory('yachtFactory', function factoryFunction($http, $rootScope, $cookies
       }
     });
   }
+  service.Cart = function(){
+    return $http ({
+      method: 'GET',
+      url: '/api/shopping_cart',
+      params: {
+        auth_token: $rootScope.userToken
+      }
+    })
+  }
+  service.Purchase = function(auth, address) {
+    return $http ({
+      method: 'POST',
+      url: '/api/shopping_cart/checkout',
+      data: {
+        auth_token: auth_token,
+        address: address
+    })
+  }
   return service;
 })
 
@@ -95,7 +125,7 @@ app.controller('frontpageController', function($scope, yachtFactory) {
     console.log($scope.searchresults);
   })
 })
-app.controller('productDetailsController', function($scope, $stateParams, yachtFactory, $rootScope) {
+app.controller('productDetailsController', function($scope, $stateParams, yachtFactory, $rootScope, $state) {
   $scope.productId = $stateParams.productId;
   console.log($scope.productId);
   yachtFactory.prodId($scope.productId)
@@ -107,8 +137,31 @@ app.controller('productDetailsController', function($scope, $stateParams, yachtF
     yachtFactory.addToCart($rootScope.userToken, $scope.productId)
     console.log($rootScope.userToken)
     console.log($scope.productId)
+    $state.go('shoppingCart')
     }
 });
+app.controller('shoppingCartController', function($scope, $stateParams, yachtFactory, $rootScope, $state) {
+  yachtFactory.Cart()
+  .success(function(data) {
+    $scope.shoppingCartData = data;
+    console.log($scope.shoppingCartData)
+
+
+    var sum = 0;
+    for(var i=0; i<data.length; i++) {
+    sum += $scope.shoppingCartData[i].prodprice
+  }
+    $scope.sum = sum;
+    $scope.checkout = function() {
+      $state.go('checkout')
+    }
+  });
+});
+app.controller('checkOutController', function($scope, $stateParams, yachtFactory, $rootScope, $state) {
+  // $scope.checkout = function() {
+  //
+  // }
+})
 
 app.controller('signupController', function($scope, $state, yachtFactory) {
   $scope.submit = function() {
@@ -153,6 +206,6 @@ app.controller('loginController', function($scope, $state, yachtFactory, $cookie
       $rootScope.userName = $cookies.get('username');
       console.log(loginInfo.password);
       $state.go('frontpage');
-    })
+    });
   }
-})
+});
