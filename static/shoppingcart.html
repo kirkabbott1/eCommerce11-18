@@ -11,6 +11,7 @@
       <th scope="row">{{$index + 1}}</th>
       <td>{{item.prodname}}</td>
       <td>{{item.prodprice}}</td>
+      <td><button ng-click='removefromcart(item.prodid)' type="button" name="button">remove</button></td>
     </tr>
     <tr>
       <td>

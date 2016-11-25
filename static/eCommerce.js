@@ -36,6 +36,9 @@ app.config(function($stateProvider, $urlRouterProvider) {
   .state({
     name: 'checkout',
     url: '/user/shoppingcart/checkout',
+    params: {
+      sum: null
+    },
     templateUrl: 'checkoutpage.html',
     controller: 'checkOutController'
   })
@@ -86,14 +89,29 @@ app.factory('yachtFactory', function factoryFunction($http, $rootScope, $cookies
     })
   }
   service.addToCart = function(auth_token, product_id) {
+    var add_or_delete = 'add';
+
     return $http ({
       method: 'POST',
       url: '/api/shopping_cart',
       data: {
         auth_token: auth_token,
-        product_id: product_id
+        product_id: product_id,
+        add_or_delete: add_or_delete
       }
     });
+  }
+  service.removeFromCart = function(auth_token, product_id) {
+    var add_or_delete = 'delete';
+    return $http ({
+      method: 'POST',
+      url: '/api/shopping_cart',
+      data: {
+        auth_token: auth_token,
+        product_id: product_id,
+        add_or_delete: add_or_delete
+      }
+    })
   }
   service.Cart = function(){
     return $http ({
@@ -104,16 +122,17 @@ app.factory('yachtFactory', function factoryFunction($http, $rootScope, $cookies
       }
     })
   }
-  service.Checkout = function(auth_token, address) {
+  service.Checkout = function(auth_token, address, stripeToken) {
     return $http ({
       method: 'POST',
       url: '/api/shopping_cart/checkout',
       data: {
         auth_token: auth_token,
-        address: address
-    }
-  });
-};
+        address: address,
+        stripe_token: stripeToken
+      }
+    });
+  };
   return service;
 });
 
@@ -138,15 +157,22 @@ app.controller('productDetailsController', function($scope, $stateParams, yachtF
     yachtFactory.addToCart($rootScope.userToken, $scope.productId)
     console.log($rootScope.userToken)
     console.log($scope.productId)
-    $state.go('productDetails')
+    $state.go('frontpage')
     }
 });
 app.controller('shoppingCartController', function($scope, $stateParams, yachtFactory, $rootScope, $state) {
+  $scope.removefromcart = function(prodId) {
+    console.log("PRODUCT ID", prodId);
+    yachtFactory.removeFromCart($rootScope.userToken, prodId)
+      .success(function() {
+        // reload the page
+        $state.reload();
+      });
+  }
   yachtFactory.Cart()
   .success(function(data) {
     $scope.shoppingCartData = data;
-    console.log($scope.shoppingCartData)
-
+    console.log("SHOPPING CART PRODUCT OBJ:", $scope.shoppingCartData);
 
     var sum = 0;
     for(var i=0; i<data.length; i++) {
@@ -154,11 +180,13 @@ app.controller('shoppingCartController', function($scope, $stateParams, yachtFac
   }
     $scope.sum = sum;
     $scope.checkout = function() {
-      $state.go('checkout')
+      $state.go('checkout', {sum: $scope.sum})
     }
   });
 });
 app.controller('checkOutController', function($scope, $stateParams, yachtFactory, $rootScope, $state) {
+  $scope.sum = $stateParams.sum;
+  console.log("sum has been passed to checkout", $scope.sum);
 
   $scope.checkedOut = function(){
     var Address = {
@@ -167,16 +195,39 @@ app.controller('checkOutController', function($scope, $stateParams, yachtFactory
       'state': $scope.state,
       'zipcode': $scope.zipcode
     }
-    console.log(Address);
-  yachtFactory.Checkout($rootScope.userToken, Address)
-  .success(function() {
-    console.log("address info entered");
+    var handler = StripeCheckout.configure({
+      // publishable key
+      key: 'pk_test_fsHKzAC0RpPxgo15k7WfFzRV',
+      locale: 'auto',
+      token: function callback(token) {
+        var stripeToken = token.id;
+        console.log("STRIPE TOKEN", token)
+        // Make checkout API call here and send the stripe token
+        // to the back end
+        yachtFactory.Checkout($rootScope.userToken, Address, token)
+        .success(function() {
+          console.log("address info entered");
 
-  }).error(function(data) {
-      console.log(Address)
-  })
+        }).error(function(data) {
+            console.log(Address)
+        })
+      }
+    });
+    // this actually opens the popup modal dialog
+    handler.open({
+      name: 'Yachts',
+      description: 'yachts',
+      amount: $scope.sum * 100
+    });
+  // yachtFactory.Checkout($rootScope.userToken, Address)
+  // .success(function() {
+  //   console.log("address info entered");
+  //
+  // }).error(function(data) {
+  //     console.log(Address)
+  // })
 
-};
+  };
 });
 
 app.controller('signupController', function($scope, $state, yachtFactory) {

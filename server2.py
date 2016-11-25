@@ -1,10 +1,23 @@
+from dotenv import load_dotenv, find_dotenv
+load_dotenv(find_dotenv())
+
 from flask import Flask, jsonify, request, render_template, session, flash, redirect
-import pg
+import pg, os
 import bcrypt
 import uuid
+import stripe
+stripe.api_key = os.environ.get("STRIPE_SECRET_KEY")
 
 app = Flask('ECommerce', static_url_path='')
-db = pg.DB(dbname='e-commerce')
+db = pg.DB(
+    dbname=os.environ.get('PG_DBNAME'),
+    host=os.environ.get('PG_HOST'),
+    user=os.environ.get('PG_USERNAME'),
+    passwd=os.environ.get('PG_PASSWORD')
+)
+
+tmp_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates')
+app = Flask('Ecommerce', static_url_path='', template_folder=tmp_dir)
 
 # For testing purposes
 @app.route('/')
@@ -82,14 +95,31 @@ def shopping_cart():
     auth_token = request.get_json().get('auth_token')
 
     check_token = db.query('select * from auth_token where token = $1', auth_token).namedresult()
+    # check if authenticated user
     if len(check_token) > 0:
-        #If authenticated user
+        # check if customer is adding or deleting item
+        add_or_delete = request.get_json().get('add_or_delete')
         customer = db.query('select customer_id from auth_token where token = $1', auth_token).namedresult()[0]
         prod_id = request.get_json().get('product_id')
-        #stores product in the shopping cart table linked to the authenticated user's id
-        db.insert('product_in_shopping_cart', product_id=prod_id, customer_id=customer.customer_id)
 
-        return 'Product Added to Cart', 200
+        if (add_or_delete == 'add'):
+            # if adding, make a query and insert item into db
+            #stores product in the shopping cart table linked to the authenticated user's id
+            db.insert('product_in_shopping_cart', product_id=prod_id, customer_id=customer.customer_id)
+
+            return 'Product Added to Cart', 200
+        elif (add_or_delete == 'delete'):
+            # if deleting, delete item from db
+            deleteItem = db.query('select id from product_in_shopping_cart where product_id = $1 and customer_id = $2', (prod_id, customer.customer_id))
+            deleteItem = deleteItem.namedresult()[0].id
+            deleteItem = int(deleteItem)
+
+            db.delete('product_in_shopping_cart',
+                {
+                    'id': deleteItem
+                }
+            )
+            return "Item deleted!!!!!!"
     else:
         # If not authenticated user
         return 'Not authorized', 403
@@ -104,7 +134,7 @@ def get_shop():
         # If authenticated user
         customer = db.query('select customer_id from auth_token where token = $1', auth_token).namedresult()[0]
         # Queries all products in the user's shopping cart
-        current_cart = db.query('select product.name as prodName, product.price as prodPrice, product.description as prodDescription, product.image_path as prodImg from product_in_shopping_cart, product where product_in_shopping_cart.product_id = product.id and customer_id =$1', customer.customer_id).dictresult()
+        current_cart = db.query('select product.id as prodId, product.name as prodName, product.price as prodPrice, product.description as prodDescription, product.image_path as prodImg from product_in_shopping_cart, product where product_in_shopping_cart.product_id = product.id and customer_id =$1', customer.customer_id).dictresult()
         # Returns results in JSON format
         return jsonify(current_cart)
     else:
@@ -116,6 +146,7 @@ def checkout():
     #Validates auth_token
     auth_token = request.get_json().get('auth_token')
     address = request.get_json().get('address')
+    stripe_token = request.get_json().get('stripe_token')
     print address
     street_address = address['street_address']
     city = address['city']
@@ -130,6 +161,14 @@ def checkout():
 
         #Queries all products in the user's shopping cart and adds their prices for a total price of the current cart
         total = db.query('select sum(product.price) as total from product_in_shopping_cart, product where product_in_shopping_cart.product_id = product.id and customer_id =$1', customer.customer_id).namedresult()[0]
+
+        stripe.Charge.create(
+          amount=total.total * 100,
+          currency="usd",
+          source= stripe_token['id'], # obtained with Stripe.js
+          description="Charge for " + stripe_token['email']
+        )
+
         # Creates a purchase record for the authenticated user and the total price of all the items in their current cart
         db.insert('purchase', customer_id=customer.customer_id, total_price=total.total,
         street_address=street_address,
@@ -147,7 +186,7 @@ def checkout():
         # Deletes all products from user's shopping cart in conclude the purchase
         result = db.query('delete from product_in_shopping_cart where customer_id= $1', customer.customer_id)
         # Returns the number of items deleted from shopping_cart (purchased)
-        return result, 200
+        return jsonify(result), 200
     else:
         # If not authenticated user
         return 'Not authorized', 403
