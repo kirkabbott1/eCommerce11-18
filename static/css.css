@@ -4,3 +4,9 @@
 .picSize {
   width: 400px;
 }
+
+.flex {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+}

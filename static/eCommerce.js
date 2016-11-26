@@ -50,11 +50,30 @@ app.config(function($stateProvider, $urlRouterProvider) {
 app.factory('yachtFactory', function factoryFunction($http, $rootScope, $cookies) {
   var service = {};
   var userInfo = {};
-  $rootScope.userName = $cookies.get('username');
-  $rootScope.userToken = $cookies.get('token');
+
+  $rootScope.factoryCookieData = null;
+
+  // COOKIE DATA GETS PASSES INTO THE factory
+  $rootScope.factoryCookieData = $cookies.getObject('userData');
+
+  // check if user is logged in
+  if ($rootScope.factoryCookieData) {
+    console.log("PAGE HAS BEEN RELOADED!!!");
+    console.log('COOKIE DATA:', $rootScope.factoryCookieData);
+    $rootScope.user_info = $rootScope.factoryCookieData.user;
+    $rootScope.auth_token = $rootScope.factoryCookieData.authtoken;
+  }
+
   $rootScope.logout = function(){
+    console.log('ROOT USERNAME BEFORE:', $rootScope.user_info);
+    console.log('ROOT USER TOKEN BEFORE:', $rootScope.auth_token);
+    // reset scope variables
+    $rootScope.factoryCookieData = null;
     $cookies.remove('userData');
-    $rootScope.userName = '';
+    $rootScope.user_info = '';
+    $rootScope.auth_token = null;
+    console.log('ROOT USERNAME AFTER:', $rootScope.user_info);
+    console.log('ROOT USER TOKEN AFTER:', $rootScope.auth_token);
   };
   service.storeUserInfo = function(data) {
     userInfo.authtoken = data.token;
@@ -114,11 +133,12 @@ app.factory('yachtFactory', function factoryFunction($http, $rootScope, $cookies
     })
   }
   service.Cart = function(){
+    console.log('ROOTSCOPE AUTH TOKEN FROM CART SERVICE:', $rootScope.auth_token);
     return $http ({
       method: 'GET',
       url: '/api/shopping_cart',
       params: {
-        auth_token: $rootScope.userToken
+        auth_token: $rootScope.auth_token
       }
     })
   }
@@ -147,15 +167,15 @@ app.controller('frontpageController', function($scope, yachtFactory) {
 })
 app.controller('productDetailsController', function($scope, $stateParams, yachtFactory, $rootScope, $state) {
   $scope.productId = $stateParams.productId;
-  console.log($scope.productId);
+  console.log($stateParams);
   yachtFactory.prodId($scope.productId)
   .success(function(data) {
     $scope.prodInfo = data[0]
     console.log($scope.prodInfo)
   })
   $scope.detailAddCart = function() {
-    yachtFactory.addToCart($rootScope.userToken, $scope.productId)
-    console.log($rootScope.userToken)
+    yachtFactory.addToCart($rootScope.auth_token, $scope.productId)
+    console.log($rootScope.auth_token)
     console.log($scope.productId)
     $state.go('frontpage')
     }
@@ -163,7 +183,7 @@ app.controller('productDetailsController', function($scope, $stateParams, yachtF
 app.controller('shoppingCartController', function($scope, $stateParams, yachtFactory, $rootScope, $state) {
   $scope.removefromcart = function(prodId) {
     console.log("PRODUCT ID", prodId);
-    yachtFactory.removeFromCart($rootScope.userToken, prodId)
+    yachtFactory.removeFromCart($rootScope.auth_token, prodId)
       .success(function() {
         // reload the page
         $state.reload();
@@ -204,7 +224,7 @@ app.controller('checkOutController', function($scope, $stateParams, yachtFactory
         console.log("STRIPE TOKEN", token)
         // Make checkout API call here and send the stripe token
         // to the back end
-        yachtFactory.Checkout($rootScope.userToken, Address, token)
+        yachtFactory.Checkout($rootScope.auth_token, Address, token)
         .success(function() {
           console.log("address info entered");
 
@@ -274,11 +294,16 @@ app.controller('loginController', function($scope, $state, yachtFactory, $cookie
     })
     .success(function(data) {
       console.log(data);
-      $cookies.putObject('userData', data.user)
-      $cookies.put('token', data.authtoken)
-      $cookies.put('username', data.user.username)
-      $rootScope.userName = $cookies.get('username');
-      console.log(loginInfo.password);
+      // store userData into a cookie
+      $cookies.putObject('userData', data)
+      // $cookies.put('token', data.authtoken)
+      // $cookies.put('username', data.user.username)
+      // create user_info and auth_token rootscope variables
+      $rootScope.user_info = data['user'];
+      $rootScope.auth_token = data['authtoken'];
+      console.log('user logged in and created user info:', $rootScope.user_info);
+      console.log("user logged in and created a token:", $rootScope.auth_token);
+      // console.log(loginInfo.password);
       $state.go('frontpage');
     });
   }

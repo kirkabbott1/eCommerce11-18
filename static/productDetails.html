@@ -1,7 +1,14 @@
+<div class="row text-center">
+  <div class="col-xs-12">
+    <h1>{{prodInfo.name}}</h1>
+    <h2>{{prodInfo.description}}</h2>
+    <h3>{{prodInfo.price | currency}}</h3>
+  </div>
+</div>
 
-{{prodInfo.name}}
-{{prodInfo.description}}
-{{prodInfo.price}}
-<img class="picSize" ng-src="pics/{{prodInfo.image_path}}" alt="" />
-
-<button ng-click='detailAddCart()' type="button" name="button">Add to Cart</button>
+<div class="row text-center">
+  <div class="col-xs-12">
+    <img class="picSize" ng-src="pics/{{prodInfo.image_path}}" alt="" />
+    <button ng-show="auth_token" ng-click='detailAddCart()' type="button" name="button">Add to Cart</button>
+  </div>
+</div>
